@@ -132,6 +132,11 @@ If you want to preserve results from previous runs, move or rename those files b
 - column detection algorithm now uses >= for the left side column instead of just >
 - has added a simple string search for CELDT and ELPAC, so even if later algo fails then we can still determine that CELDT and ELPAC exist
 
+### 🧩 PSUSD Version 1.1 — *February 16, 2026*
+**Repository:** `PSUSD`  
+- Supports **PDF, PNG, and JPG**   
+- Caches results for each file using .pkl format and reads those if available to skip running the full pipeline
+
 ---
 
 ## 🏗️ Basic Architecture (Version 0.05.3)
@@ -203,7 +208,7 @@ The project consists of **five main functional files:**
 ---
 
 ## 🐞 Known Issues
-- No currently known issues
+- Rows aren't properly detected on all transcripts, and detecing the header-line also seems to be a problem
 
 ---
 

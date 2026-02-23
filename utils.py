@@ -7,6 +7,8 @@ import numpy as np
 import easyocr
 import json
 import os
+import hashlib
+import pickle
 from Row_Utilities import check_header_rows_2_and_3, findTextRows, findMatchingRowPatterns
 from Old_Column_Algorithm import    check_predicted_column_values
 from New_Column_Algorithm import detect_four_columns
@@ -53,6 +55,31 @@ def get_unique_filename(directory, base_filename, extension):
         counter += 1
     
     return full_path
+
+
+CACHE_DIR = "OCR_Cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def file_hash(path):
+    hasher = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+def save_cache(file_key, data_tuple):
+    cache_file = os.path.join(CACHE_DIR, f"{file_key}.pkl")
+    with open(cache_file, "wb") as f:
+        pickle.dump(data_tuple, f)
+
+def load_cache(file_key):
+    cache_file = os.path.join(CACHE_DIR, f"{file_key}.pkl")
+    if os.path.exists(cache_file):
+        with open(cache_file, "rb") as f:
+            return pickle.load(f)
+    return None
+
+
 
 def openJpgImage(jpg_path):
     image = cv2.imread(jpg_path, cv2.IMREAD_GRAYSCALE)
@@ -716,6 +743,18 @@ def process_image(filename, input_folder_path):
             if os.path.exists(OCR_Data_Path2):
                 os.remove(OCR_Data_Path2)
 
+
+
+    file_path = os.path.join(input_folder_path, filename)
+    file_extension = os.path.splitext(file_path)[1].lower()
+
+    key = file_hash(file_path)
+
+    cached_result = load_cache(key)
+    if cached_result:
+        print("Using cached OCR result.")
+        return cached_result
+
     def extract_data(png_path, height, width, page_number):
         # do ocr read if necessary
             result = run_ocr(png_path)
@@ -724,10 +763,6 @@ def process_image(filename, input_folder_path):
 
             with open(OCR_Data_Path, 'r') as json_file:
                 OCR_Data = json.load(json_file)
-
-            # print("complete OCR:")
-            # for text in OCR_Data:
-            #     print(text)
 
 
             # check generically for any celdt or elpac strings
@@ -866,6 +901,8 @@ def process_image(filename, input_folder_path):
     file_path = os.path.join(input_folder_path, filename)
     file_extension = os.path.splitext(filename)[1]
 
+    key = file_hash(file_path)
+
 
     file_extension = os.path.splitext(file_path)[1].lower()
     OCR_Data_Path2 = None
@@ -880,6 +917,8 @@ def process_image(filename, input_folder_path):
         raise ValueError(f"Unimplemented file type: {file_extension}")
     else:
         raise ValueError(f"file type {file_extension} not recognized")
+    
+
 
     celdt_date = extract_4_digit_dates_from_strings(celdt_rows)
     elpac_date = extract_4_digit_dates_from_strings(elpac_rows)
@@ -889,11 +928,29 @@ def process_image(filename, input_folder_path):
     exit_date = extract_8_digit_dates_from_strings(exit_date_string)
 
 
+    final_result = (
+        celdt_detected,
+        celdt_rows,
+        elpac_detected,
+        elpac_rows,
+        transfer_worksheet_found,
+        entry_date,
+        exit_date,
+        celdt_date,
+        elpac_date,
+        celdt_str,
+        elpac_str
+    )
+
+    save_cache(key, final_result)
+
+
+
     print("about to remove temp files")
     remove_temporary_files()
     print("done removing temp files")
-    return celdt_detected, celdt_rows, elpac_detected, elpac_rows, \
-        transfer_worksheet_found, entry_date, exit_date, celdt_date, elpac_date, celdt_str, elpac_str    # dates, scores, score_types
+
+    return final_result
 
 
 
