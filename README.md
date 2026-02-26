@@ -137,6 +137,11 @@ If you want to preserve results from previous runs, move or rename those files b
 - Supports **PDF, PNG, and JPG**   
 - Caches results for each file using .pkl format and reads those if available to skip running the full pipeline
 
+### 🧩 PSUSD Version 1.2 — *February 26, 2026*
+**Repository:** `PSUSD`  
+- Supports **PDF, PNG, and JPG**   
+- Fixed a bug in utils.py where elpac_str2 and celdt_str2 could be referenced before initialization
+
 ---
 
 ## 🏗️ Basic Architecture (Version 0.05.3)

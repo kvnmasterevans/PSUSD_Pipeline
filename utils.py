@@ -850,6 +850,8 @@ def process_image(filename, input_folder_path):
         
 
         OCR_Data_Path2 = None
+        elpac_str2 = None
+        celdt_str2 = None
         if standardized_png_path2 is not None:
             print("logic for the second one...")
             
