@@ -13,6 +13,7 @@ from Row_Utilities import check_header_rows_2_and_3, findTextRows, findMatchingR
 from Old_Column_Algorithm import    check_predicted_column_values
 from New_Column_Algorithm import detect_four_columns
 from check_for_CELDT_and_ELPAC import check_CELDT_ELPAC_status, Generic_CELDT_ELPAC_String_Check
+from extract_course_catalog import extract_course_catalog, load_catalog, save_catalog
 
 
 
@@ -20,6 +21,8 @@ USE_NEW_COLUMN_ALGORITHM = True  # <-- flip this to swap between new and old col
 
 
 OCR_READER = None
+
+catalog = load_catalog()
 
 def init_ocr():
     global OCR_READER
@@ -744,7 +747,7 @@ def process_image(filename, input_folder_path):
                 os.remove(OCR_Data_Path2)
 
 
-
+    global catalog
     file_path = os.path.join(input_folder_path, filename)
     file_extension = os.path.splitext(file_path)[1].lower()
 
@@ -753,92 +756,97 @@ def process_image(filename, input_folder_path):
     cached_result = load_cache(key)
     if cached_result:
         print("Using cached OCR result.")
-        return cached_result
+        catalog = extract_course_catalog(cached_result["rows"], catalog)
+        save_catalog(catalog)
+        return cached_result["data"]
 
     def extract_data(png_path, height, width, page_number):
+        
         # do ocr read if necessary
-            result = run_ocr(png_path)
-            OCR_Data_Path = convert_OCR_page_result_to_json(result, filename, page_number)
+        result = run_ocr(png_path)
+        OCR_Data_Path = convert_OCR_page_result_to_json(result, filename, page_number)
 
 
-            with open(OCR_Data_Path, 'r') as json_file:
-                OCR_Data = json.load(json_file)
+        with open(OCR_Data_Path, 'r') as json_file:
+            OCR_Data = json.load(json_file)
 
 
-            # check generically for any celdt or elpac strings
-            celdt_string, elpac_string = Generic_CELDT_ELPAC_String_Check(OCR_Data)
+        # check generically for any celdt or elpac strings
+        celdt_string, elpac_string = Generic_CELDT_ELPAC_String_Check(OCR_Data)
 
-            # # # check for transfer worksheet
-            transfer_worksheet_found = check_for_transfer_worksheet(OCR_Data)
-            print("Checked for transfer worksheet properly...")
-
-
-
-
-            # originalImg = openJpgImage(standardized_png_path1)
-            textlessImg = removeText(png_path, OCR_Data)
-            print("text removed...")
-            CutoffStrings = ["standardized", "tests", "crs id", "course"]
-            toplessImg, coursesHeaderRow = removeTop(textlessImg, OCR_Data, CutoffStrings)
-            print("Top removed...")
-
-            # column row stuff:
-            bottomlessImg = remove_img_bottom(toplessImg, coursesHeaderRow, height, width)
-            print("bottom removed...")
-
-            projection_profile = np.sum(bottomlessImg, axis=0)
-            print("projection summed...")
-            blackPixProjProfile = createBlackPixelProjectionProfile(projection_profile)
-            print("projection profile created...")
+        # # # check for transfer worksheet
+        transfer_worksheet_found = check_for_transfer_worksheet(OCR_Data)
+        print("Checked for transfer worksheet properly...")
 
 
 
 
+        # originalImg = openJpgImage(standardized_png_path1)
+        textlessImg = removeText(png_path, OCR_Data)
+        print("text removed...")
+        CutoffStrings = ["standardized", "tests", "crs id", "course"]
+        toplessImg, coursesHeaderRow = removeTop(textlessImg, OCR_Data, CutoffStrings)
+        print("Top removed...")
 
-            def old_algorithm(blackPixProjProfile, png_path, height):
-                return check_predicted_column_values(blackPixProjProfile, png_path, height)
-            def new_algorithm(blackPixProjProfile):
-                return detect_four_columns( blackPixProjProfile)
-            '''
-                SWITCH BETWEEN THE OLD AND NEW COLUMN-FINDING ALGORITHMS
-                BY SETTING THE VARIABLE AT TOP OF SCRIPT
-            '''
-            if USE_NEW_COLUMN_ALGORITHM:
-                columns = new_algorithm(blackPixProjProfile)
-            else:
-                columns = old_algorithm(blackPixProjProfile, png_path, height)
+        # column row stuff:
+        bottomlessImg = remove_img_bottom(toplessImg, coursesHeaderRow, height, width)
+        print("bottom removed...")
 
-            # buffer first column to be slightly wider  to the left:
-            columns[0] = columns[0] - (width / 100)
-
-
-            print(f" ~!~ Columns found: {columns}")
-
-            
-            print("column vals checked...")
-            col1Rows, col2Rows, col3Rows = findTextRows(OCR_Data, columns, coursesHeaderRow)
-            print("text rows found...")
-            rows = []
-            print("row 1:")
-            for row in col1Rows:
-                rows.append(row)
-                print(f"/t{row}")
-            print("row 2:")   
-            for row in col2Rows:
-                rows.append(row)
-                print(f"/t{row}")
-            print("row 3:")
-            for row in col3Rows:
-                rows.append(row)
-                print(f"/t{row}")
-            print("Rows created correctly...")
+        projection_profile = np.sum(bottomlessImg, axis=0)
+        print("projection summed...")
+        blackPixProjProfile = createBlackPixelProjectionProfile(projection_profile)
+        print("projection profile created...")
 
 
-            entry_date, exit_date = extract_enter_and_graduation_dates(OCR_Data, rows)
-            
-            
 
-            return rows, OCR_Data_Path, transfer_worksheet_found, entry_date, exit_date, celdt_string, elpac_string
+
+
+        def old_algorithm(blackPixProjProfile, png_path, height):
+            return check_predicted_column_values(blackPixProjProfile, png_path, height)
+        def new_algorithm(blackPixProjProfile):
+            return detect_four_columns( blackPixProjProfile)
+        '''
+            SWITCH BETWEEN THE OLD AND NEW COLUMN-FINDING ALGORITHMS
+            BY SETTING THE VARIABLE AT TOP OF SCRIPT
+        '''
+        if USE_NEW_COLUMN_ALGORITHM:
+            columns = new_algorithm(blackPixProjProfile)
+        else:
+            columns = old_algorithm(blackPixProjProfile, png_path, height)
+
+        # buffer first column to be slightly wider  to the left:
+        columns[0] = columns[0] - (width / 100)
+
+
+        print(f" ~!~ Columns found: {columns}")
+
+        
+        print("column vals checked...")
+        col1Rows, col2Rows, col3Rows = findTextRows(OCR_Data, columns, coursesHeaderRow)
+        print("text rows found...")
+        rows = []
+        print("row 1:")
+        for row in col1Rows:
+            rows.append(row)
+            print(f"/t{row}")
+        print("row 2:")   
+        for row in col2Rows:
+            rows.append(row)
+            print(f"/t{row}")
+        print("row 3:")
+        for row in col3Rows:
+            rows.append(row)
+            print(f"/t{row}")
+        print("Rows created correctly...")
+
+
+        entry_date, exit_date = extract_enter_and_graduation_dates(OCR_Data, rows)
+        global catalog
+        catalog = extract_course_catalog(rows, catalog)
+        
+        
+
+        return rows, OCR_Data_Path, transfer_worksheet_found, entry_date, exit_date, celdt_string, elpac_string
 
     def process_pdf():
         # standardize image format
@@ -873,7 +881,7 @@ def process_image(filename, input_folder_path):
                 elpac_rows.append(elpac_row)
 
         return celdt_detected, confirmed_celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, OCR_Data_Path2, \
-                transfer_worksheet_found, entry_date, exit_date, (celdt_str or celdt_str2), (elpac_str or elpac_str2)
+                transfer_worksheet_found, entry_date, exit_date, (celdt_str or celdt_str2), (elpac_str or elpac_str2), rows
     
     
     def process_png():
@@ -883,7 +891,7 @@ def process_image(filename, input_folder_path):
         celdt_detected, confirmed_celdt_rows, elpac_detected, elpac_rows = check_CELDT_ELPAC_status(rows)
 
         return celdt_detected, confirmed_celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, \
-                transfer_worksheet_found, entry_date, exit_date, celdt_str, elpac_str
+                transfer_worksheet_found, entry_date, exit_date, celdt_str, elpac_str, rows
         
 
     def process_jpg():
@@ -893,7 +901,7 @@ def process_image(filename, input_folder_path):
         celdt_detected, confirmed_celdt_rows, elpac_detected, elpac_rows = check_CELDT_ELPAC_status(rows)
 
         return celdt_detected, confirmed_celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path,\
-                transfer_worksheet_found, entry_date, exit_date, celdt_str, elpac_str
+                transfer_worksheet_found, entry_date, exit_date, celdt_str, elpac_str, rows
 
 
 
@@ -910,11 +918,11 @@ def process_image(filename, input_folder_path):
     OCR_Data_Path2 = None
     os.makedirs("Temp", exist_ok=True)
     if file_extension == ".png":
-        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str = process_png()
+        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str, rows = process_png()
     elif file_extension == ".pdf":
-        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, OCR_Data_Path2, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str = process_pdf()
+        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, OCR_Data_Path2, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str, rows = process_pdf()
     elif file_extension in [".jpg", ".jpeg"]:
-        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str = process_jpg()
+        celdt_detected, celdt_rows, elpac_detected, elpac_rows, OCR_Data_Path, transfer_worksheet_found, entry_date_string, exit_date_string, celdt_str, elpac_str, rows = process_jpg()
     elif file_extension == ".tiff":
         raise ValueError(f"Unimplemented file type: {file_extension}")
     else:
@@ -930,19 +938,36 @@ def process_image(filename, input_folder_path):
     exit_date = extract_8_digit_dates_from_strings(exit_date_string)
 
 
-    final_result = (
-        celdt_detected,
-        celdt_rows,
-        elpac_detected,
-        elpac_rows,
-        transfer_worksheet_found,
-        entry_date,
-        exit_date,
-        celdt_date,
-        elpac_date,
-        celdt_str,
-        elpac_str
-    )
+    # final_result = (
+    #     celdt_detected,
+    #     celdt_rows,
+    #     elpac_detected,
+    #     elpac_rows,
+    #     transfer_worksheet_found,
+    #     entry_date,
+    #     exit_date,
+    #     celdt_date,
+    #     elpac_date,
+    #     celdt_str,
+    #     elpac_str
+    # )
+    final_result = {
+        "filename": filename,
+        "data": (
+            celdt_detected,
+            celdt_rows,
+            elpac_detected,
+            elpac_rows,
+            transfer_worksheet_found,
+            entry_date,
+            exit_date,
+            celdt_date,
+            elpac_date,
+            celdt_str,
+            elpac_str
+        ),
+        "rows": rows
+    }
 
     save_cache(key, final_result)
 
@@ -951,8 +976,9 @@ def process_image(filename, input_folder_path):
     print("about to remove temp files")
     remove_temporary_files()
     print("done removing temp files")
+    save_catalog(catalog)
 
-    return final_result
+    return final_result["data"]
 
 
 
